@@ -208,6 +208,9 @@ func VipsIsTypeSupported(t ImageType) bool {
 	if t == JXL {
 		return int(C.vips_type_find_bridge(C.JXL)) != 0
 	}
+	if t == EXR {
+		return int(C.vips_type_find_bridge(C.MAGICK)) != 0
+	}
 	return false
 }
 
@@ -784,6 +787,10 @@ func vipsImageType(buf []byte) ImageType {
 		buf[8] == 0x0D && buf[9] == 0x0A && buf[10] == 0x87 && buf[11] == 0x0A {
 		// This is an ISOBMFF-based container
 		return JXL
+	}
+	if IsTypeSupported(EXR) && buf[0] == 0x76 && buf[1] == 0x2f &&
+		buf[2] == 0x31 && buf[3] == 0x01 {
+		return EXR
 	}
 
 	return UNKNOWN
