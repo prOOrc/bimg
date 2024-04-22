@@ -843,6 +843,17 @@ func max(x int) int {
 	return int(math.Max(float64(x), 0))
 }
 
+func vipsAddAlpha(image *C.VipsImage, alpha float64) (*C.VipsImage, error) {
+	var out *C.VipsImage
+	defer C.g_object_unref(C.gpointer(image))
+
+	err := C.vips_add_band(image, &out, C.double(alpha))
+	if err != 0 {
+		return nil, catchVipsError()
+	}
+	return out, nil
+}
+
 func vipsDrawWatermark(image *C.VipsImage, o WatermarkImage) (*C.VipsImage, error) {
 	var out *C.VipsImage
 
