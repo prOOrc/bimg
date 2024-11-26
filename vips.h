@@ -2,7 +2,6 @@
 #include <string.h>
 #include <vips/vips.h>
 #include <vips/foreign.h>
-#include <vips/vips7compat.h>
 #include <vips/vector.h>
 
 /**
@@ -35,7 +34,8 @@ enum types {
 	SVG,
 	MAGICK,
 	HEIF,
-	AVIF
+	AVIF,
+	JXL
 };
 
 typedef struct {
@@ -129,8 +129,8 @@ vips_shrink_bridge(VipsImage *in, VipsImage **out, double xshrink, double yshrin
 }
 
 int
-vips_reduce_bridge(VipsImage *in, VipsImage **out, double xshrink, double yshrink) {
-	return vips_reduce(in, out, xshrink, yshrink, NULL);
+vips_reduce_bridge(VipsImage *in, VipsImage **out, double xshrink, double yshrink, int kernel) {
+	return vips_reduce(in, out, xshrink, yshrink, "kernel", kernel);
 }
 
 int
@@ -164,6 +164,11 @@ vips_type_find_bridge(int t) {
 		return vips_type_find("VipsOperation", "heifload");
 	}
 #endif
+#if (VIPS_MAJOR_VERSION > 8 || (VIPS_MAJOR_VERSION == 8 && VIPS_MINOR_VERSION >= 11))
+	if (t == JXL) {
+		return vips_type_find("VipsOperation", "jxlload");
+	}
+#endif
 	return 0;
 }
 
@@ -184,6 +189,11 @@ vips_type_find_save_bridge(int t) {
 #if (VIPS_MAJOR_VERSION > 8 || (VIPS_MAJOR_VERSION == 8 && VIPS_MINOR_VERSION >= 8))
 	if (t == HEIF) {
 		return vips_type_find("VipsOperation", "heifsave_buffer");
+	}
+#endif
+#if (VIPS_MAJOR_VERSION > 8 || (VIPS_MAJOR_VERSION == 8 && VIPS_MINOR_VERSION >= 11))
+    if (t == JXL) {
+		return vips_type_find("VipsOperation", "jxlsave_buffer");
 	}
 #endif
 #if (VIPS_MAJOR_VERSION > 8 || (VIPS_MAJOR_VERSION == 8 && VIPS_MINOR_VERSION >= 12))
@@ -336,7 +346,7 @@ vips_jpegsave_bridge(VipsImage *in, void **buf, size_t *len, int strip, int qual
 
 int
 vips_pngsave_bridge(VipsImage *in, void **buf, size_t *len, int strip, int compression, int quality, int interlace, int palette, int speed) {
-#if (VIPS_MAJOR_VERSION >= 8 && VIPS_MINOR_VERSION >= 7)
+#if (VIPS_MAJOR_VERSION >= 8 && VIPS_MINOR_VERSION >= 12)
 	int effort = 10 - speed;
 	return vips_pngsave_buffer(in, buf, len,
 		"strip", INT_TO_GBOOLEAN(strip),
@@ -346,6 +356,15 @@ vips_pngsave_bridge(VipsImage *in, void **buf, size_t *len, int strip, int compr
 		"palette", INT_TO_GBOOLEAN(palette),
 		"Q", quality,
 		"effort", effort,
+		NULL
+	);
+#elif (VIPS_MAJOR_VERSION >= 8 && VIPS_MINOR_VERSION >= 7)
+	return vips_pngsave_buffer(in, buf, len,
+		"strip", INT_TO_GBOOLEAN(strip),
+		"compression", compression,
+		"interlace", INT_TO_GBOOLEAN(interlace),
+		"filter", VIPS_FOREIGN_PNG_FILTER_ALL,
+		"palette", INT_TO_GBOOLEAN(palette),
 		NULL
 	);
 #else
@@ -415,10 +434,23 @@ vips_heifsave_bridge(VipsImage *in, void **buf, size_t *len, int strip, int qual
 #endif
 }
 
+int vips_jxlsave_bridge(VipsImage *in, void **buf, size_t *len, int strip, int quality, int lossless) {
+#if (VIPS_MAJOR_VERSION > 8 || (VIPS_MAJOR_VERSION == 8 && VIPS_MINOR_VERSION >= 11))
+    return vips_jxlsave_buffer(in, buf, len,
+    	"strip", INT_TO_GBOOLEAN(strip),
+    	"Q", quality,
+        "lossless", INT_TO_GBOOLEAN(lossless),
+        NULL
+    );
+#else
+	return 0;
+#endif
+}
+
 int
 vips_gifsave_bridge(VipsImage *in, void **buf, size_t *len, int strip) {
 #if (VIPS_MAJOR_VERSION > 8 || (VIPS_MAJOR_VERSION == 8 && VIPS_MINOR_VERSION >= 12))
-	return vips_gifsave_buffer(in, buf, len, 
+	return vips_gifsave_buffer(in, buf, len,
 		"strip", INT_TO_GBOOLEAN(strip),
 		NULL
 	);
@@ -481,6 +513,10 @@ vips_init_image (void *buf, size_t len, int imageType, VipsImage **out) {
 #if (VIPS_MAJOR_VERSION == 8 && VIPS_MINOR_VERSION >= 9)
 	} else if (imageType == AVIF) {
 		code = vips_heifload_buffer(buf, len, out, "access", VIPS_ACCESS_RANDOM, NULL);
+#endif
+#if (VIPS_MAJOR_VERSION > 8 || (VIPS_MAJOR_VERSION == 8 && VIPS_MINOR_VERSION >= 11))
+	} else if (imageType == JXL) {
+		code = vips_jxlload_buffer(buf, len, out, "access", VIPS_ACCESS_RANDOM, NULL);
 #endif
 	}
 
